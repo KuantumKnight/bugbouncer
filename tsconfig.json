@@ -19,7 +19,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@bugbouncer/physics": ["./src/hooks/physics/index.ts"]
     }
   },
   "include": [
