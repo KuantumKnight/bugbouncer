@@ -25,6 +25,13 @@ export class ConfigEngine {
   }
 
   /**
+   * Returns the list of sensitive keys for external verification.
+   */
+  public get_sensitive_keys(): string[] {
+    return [...this.config.exclusions.sensitive_keys];
+  }
+
+  /**
    * Checks if a component should be observed.
    */
   public should_observe_component(name: string): boolean {
@@ -61,24 +68,25 @@ export class ConfigEngine {
   /**
    * Deeply masks sensitive keys in a payload object.
    */
-  public mask_payload(payload: any): any {
+  public mask_payload<T>(payload: T): T {
     if (!payload || typeof payload !== "object") return payload;
 
     if (Array.isArray(payload)) {
-      return payload.map(item => this.mask_payload(item));
+      return payload.map(item => this.mask_payload(item)) as unknown as T;
     }
 
-    const masked: Record<string, any> = {};
-    for (const key in payload) {
+    const masked: Record<string, unknown> = {};
+    const record = payload as Record<string, unknown>;
+    for (const key in record) {
       if (this.config.exclusions.sensitive_keys.includes(key.toLowerCase())) {
         masked[key] = "[MASKED]";
-      } else if (typeof payload[key] === "object") {
-        masked[key] = this.mask_payload(payload[key]);
+      } else if (typeof record[key] === "object") {
+        masked[key] = this.mask_payload(record[key]);
       } else {
-        masked[key] = payload[key];
+        masked[key] = record[key];
       }
     }
-    return masked;
+    return masked as unknown as T;
   }
 
   private matches(value: string, patterns?: (string | RegExp)[]): boolean {

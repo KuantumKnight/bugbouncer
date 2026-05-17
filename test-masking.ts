@@ -1,4 +1,3 @@
-import { config_engine } from "./src/kernel/config/engine";
 import { DagMapper } from "./src/kernel/mapper/dag";
 
 function assert(condition: boolean, message: string) {
@@ -23,7 +22,8 @@ function run_tests() {
   };
 
   const dag_mapper = new DagMapper();
-  const normalized = dag_mapper.normalize_payload(test_payload);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const normalized: any = dag_mapper.normalize_payload(test_payload);
 
   console.log("Original Payload:", JSON.stringify(test_payload, null, 2));
   console.log("Normalized Payload:", JSON.stringify(normalized, null, 2));

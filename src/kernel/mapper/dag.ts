@@ -7,12 +7,13 @@
  * for orphaned events.
  */
 
-import { TraceMetadata } from "@/types/trace";
 import { config_engine } from "@/kernel/config/engine";
+import { DependencyInfo } from "@/kernel/ast/types";
 
 export class DagMapper {
   private span_history: Map<string, string> = new Map(); // span_id -> trace_id
   private last_active_span_id: string | null = null;
+  private dependency_graph: Map<string, DependencyInfo> = new Map(); // component_path -> info
 
   /**
    * Registers a span and its trace context.
@@ -25,10 +26,37 @@ export class DagMapper {
   }
 
   /**
+   * Registers component dependency information.
+   * This is used to build a static dependency graph that enriches
+   * the runtime causal tracing.
+   */
+  public register_dependencies(info: DependencyInfo): void {
+    this.dependency_graph.set(info.source_file, info);
+  }
+
+  /**
+   * Injects a fuzzer anomaly into the trace context.
+   */
+  public inject_anomaly(anomaly: import("@/kernel/fuzzer/types").FuzzerAnomaly): void {
+    // This provides a hook for the ledger to pick up fuzzer anomalies
+    // and correctly normalize them to snake_case.
+    const anomaly_payload = {
+      event_type: "fuzzer_anomaly",
+      payload: {
+        anomaly_data: anomaly
+      },
+      stability_score: 0.0,
+      is_panic_event: false
+    };
+    this.normalize_payload(anomaly_payload);
+    // TODO: Forward to Ledger
+  }
+
+  /**
    * Attempts to find the most likely parent for an event if one isn't provided.
    * This uses "temporal proximity" and the current execution context.
    */
-  public resolve_parent(event_type: TraceMetadata["event_type"]): string | undefined {
+  public resolve_parent(): string | undefined {
     // For now, simple link to last active span.
     // In the future, this will use a more sophisticated stack-based approach
     // or Zone.js-like context tracking.
@@ -38,24 +66,25 @@ export class DagMapper {
   /**
    * Enforces snake_case on all payload keys before they reach the ledger.
    */
-  public normalize_payload(payload: any): Record<string, any> {
-    if (!payload || typeof payload !== "object") return {};
+  public normalize_payload<T>(payload: T): T {
+    if (!payload || typeof payload !== "object") return {} as unknown as T;
     
     // 1. Mask sensitive data
     const masked_payload = config_engine.mask_payload(payload);
     
     // 2. Normalize keys to snake_case deeply
-    return this.deep_snake_case(masked_payload);
+    return this.deep_snake_case(masked_payload) as unknown as T;
   }
 
-  private deep_snake_case(obj: any): any {
+  private deep_snake_case(obj: unknown): unknown {
     if (obj === null || typeof obj !== "object") return obj;
     if (Array.isArray(obj)) return obj.map(item => this.deep_snake_case(item));
 
-    const normalized: Record<string, any> = {};
-    for (const key in obj) {
+    const normalized: Record<string, unknown> = {};
+    const record = obj as Record<string, unknown>;
+    for (const key in record) {
       const snake_key = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-      normalized[snake_key] = this.deep_snake_case(obj[key]);
+      normalized[snake_key] = this.deep_snake_case(record[key]);
     }
     return normalized;
   }

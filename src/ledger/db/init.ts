@@ -6,7 +6,8 @@
  * the Ledger Worker and runs inside the Worker context.
  */
 
-import { TRACE_TABLE_DDL, TRACE_INDEX_DDL } from "@/ledger/schema/trace";
+import { TRACE_TABLE_DDL, TRACE_INDEX_DDL, TRACE_TABLE_NAME } from "@/ledger/schema/trace";
+import { PROJECT_METADATA_DDL, SCHEMA_INDEX_DDL } from "@/ledger/schema/rag";
 
 // ──────────────────────────────────────────────
 // Types for the sqlite3 WASM API (minimal surface)
@@ -86,6 +87,15 @@ export function init_database(sqlite3: Sqlite3Module): {
  */
 function run_migrations(db: Sqlite3Database): void {
   db.exec(TRACE_TABLE_DDL);
+  db.exec(PROJECT_METADATA_DDL);
+  db.exec(SCHEMA_INDEX_DDL);
+
+  // Migration for existing databases that were created before user_id was added
+  try {
+    db.exec(`ALTER TABLE ${TRACE_TABLE_NAME} ADD COLUMN user_id TEXT;`);
+  } catch {
+    // Column already exists, ignore
+  }
 
   // SQLite requires each CREATE INDEX to be a separate statement
   const index_statements = TRACE_INDEX_DDL.split(";")

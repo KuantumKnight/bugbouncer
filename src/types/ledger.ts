@@ -16,7 +16,10 @@ export type LedgerCommand =
   | LedgerInsertCommand
   | LedgerQueryCommand
   | LedgerFlushCommand
-  | LedgerStatusCommand;
+  | LedgerStatusCommand
+  | LedgerSaveProjectCommand
+  | LedgerIndexSchemaCommand
+  | LedgerSearchSchemaCommand;
 
 export interface LedgerInsertCommand {
   command_type: "insert_trace";
@@ -33,6 +36,7 @@ export interface LedgerQueryCommand {
     max_stability_score?: number;
     since_timestamp_nanos?: number;
     limit?: number;
+    user_id?: string | null;
   };
 }
 
@@ -46,6 +50,31 @@ export interface LedgerStatusCommand {
   request_id: string;
 }
 
+export interface LedgerSaveProjectCommand {
+  command_type: "save_project";
+  request_id: string;
+  project_id: string;
+  framework: string;
+  auth_provider: string;
+  database_provider: string;
+}
+
+export interface LedgerIndexSchemaCommand {
+  command_type: "index_schema";
+  request_id: string;
+  project_id: string;
+  file_path: string;
+  content: string;
+}
+
+export interface LedgerSearchSchemaCommand {
+  command_type: "search_schema";
+  request_id: string;
+  project_id: string;
+  query: string;
+  limit?: number;
+}
+
 // ──────────────────────────────────────────────
 // Worker Response Types (Worker → Main Thread)
 // ──────────────────────────────────────────────
@@ -56,7 +85,10 @@ export type LedgerResponse =
   | LedgerFlushResponse
   | LedgerStatusResponse
   | LedgerErrorResponse
-  | LedgerReadyResponse;
+  | LedgerReadyResponse
+  | LedgerSaveProjectResponse
+  | LedgerIndexSchemaResponse
+  | LedgerSearchSchemaResponse;
 
 export interface LedgerInsertResponse {
   response_type: "insert_ok";
@@ -96,4 +128,26 @@ export interface LedgerReadyResponse {
   request_id: "init";
   is_opfs: boolean;
   is_encrypted: boolean;
+}
+
+export interface LedgerSaveProjectResponse {
+  response_type: "save_project_ok";
+  request_id: string;
+}
+
+export interface LedgerIndexSchemaResponse {
+  response_type: "index_schema_ok";
+  request_id: string;
+}
+
+export interface SearchResult {
+  file_path: string;
+  content: string;
+  rank: number;
+}
+
+export interface LedgerSearchSchemaResponse {
+  response_type: "search_schema_result";
+  request_id: string;
+  results: SearchResult[];
 }

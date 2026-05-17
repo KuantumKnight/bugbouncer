@@ -11,6 +11,17 @@ import { TraceMetadata } from "@/types/trace";
 import { config_engine } from "@/kernel/config/engine";
 import { DagMapper } from "@/kernel/mapper/dag";
 
+interface PatchedXHR extends XMLHttpRequest {
+  __bugbouncer_ignored?: boolean;
+  __bugbouncer_meta?: {
+    method: string;
+    url: string;
+    start_time: number;
+    trace_id: string;
+    span_id: string;
+  };
+}
+
 export class NetworkObserver {
   private ledger_client: LedgerClient;
   private dag_mapper: DagMapper;
@@ -82,15 +93,16 @@ export class NetworkObserver {
   }
 
   private patch_xhr(): void {
-    const self = this;
     const original_open = XMLHttpRequest.prototype.open;
     const original_send = XMLHttpRequest.prototype.send;
+    const record = (data: Parameters<NetworkObserver["record_request"]>[0]) => this.record_request(data);
 
-    (XMLHttpRequest.prototype as any).open = function(method: string, url: string | URL) {
+    (XMLHttpRequest.prototype as unknown as { open: (...args: Parameters<typeof original_open>) => void }).open = function(this: PatchedXHR, ...args: Parameters<typeof original_open>) {
+      const [method, url] = args;
       const url_str = url.toString();
       if (!config_engine.should_observe_url(url_str)) {
         this.__bugbouncer_ignored = true;
-        return original_open.apply(this, arguments as any);
+        return original_open.apply(this, args);
       }
 
       this.__bugbouncer_meta = {
@@ -100,20 +112,20 @@ export class NetworkObserver {
         trace_id: causal_context.get_trace_id(),
         span_id: `net-xhr-${crypto.randomUUID().slice(0, 8)}`
       };
-      return original_open.apply(this, arguments as any);
+      return original_open.apply(this, args);
     };
 
-    XMLHttpRequest.prototype.send = function() {
-      if ((this as any).__bugbouncer_ignored) {
-        return original_send.apply(this, arguments as any);
+    XMLHttpRequest.prototype.send = function(this: PatchedXHR, ...args: Parameters<typeof original_send>) {
+      if (this.__bugbouncer_ignored) {
+        return original_send.apply(this, args);
       }
-      const meta = (this as any).__bugbouncer_meta;
+      const meta = this.__bugbouncer_meta;
       if (meta) {
         this.setRequestHeader("x-bugbouncer-trace-id", meta.trace_id);
         
         this.addEventListener("loadend", () => {
           const end_time = performance.now();
-          self.record_request({
+          record({
             trace_id: meta.trace_id,
             span_id: meta.span_id,
             url: meta.url,
@@ -124,7 +136,7 @@ export class NetworkObserver {
           });
         });
       }
-      return original_send.apply(this, arguments as any);
+      return original_send.apply(this, args);
     };
   }
 
@@ -152,9 +164,10 @@ export class NetworkObserver {
         latency_ms: data.duration_ms,
         request_type: data.type,
         error_message: data.error
-      }) as any,
+      }) as TraceMetadata["payload"],
       stability_score: data.status >= 400 || data.error ? 0.0 : 1.0,
-      is_panic_event: data.status >= 500
+      is_panic_event: data.status >= 500,
+      user_id: causal_context.get_user_id() ?? undefined
     };
 
     this.ledger_client.insert_trace(trace);

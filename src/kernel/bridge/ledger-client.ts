@@ -18,6 +18,7 @@ import type {
   LedgerResponse,
   LedgerQueryCommand,
   LedgerReadyResponse,
+  SearchResult,
 } from "@/types/ledger";
 
 // ──────────────────────────────────────────────
@@ -62,7 +63,7 @@ export class LedgerClient {
   private spawn_worker(): void {
     try {
       this.worker = new Worker(
-        new URL("../../workers/ledger.worker.ts", import.meta.url),
+        new URL("../../../workers/ledger.worker.ts", import.meta.url),
         { type: "module" }
       );
 
@@ -225,6 +226,73 @@ export class LedgerClient {
       db_size_bytes: response.db_size_bytes,
       is_encrypted: response.is_encrypted,
     };
+  }
+
+  /**
+   * Saves project metadata for local RAG indexing.
+   */
+  async save_project(
+    project_id: string,
+    framework: string,
+    auth_provider: string,
+    database_provider: string
+  ): Promise<void> {
+    const response = await this.send({
+      command_type: "save_project",
+      request_id: crypto.randomUUID(),
+      project_id,
+      framework,
+      auth_provider,
+      database_provider,
+    });
+
+    if (response.response_type !== "save_project_ok") {
+      throw new Error(`Unexpected response: ${response.response_type}`);
+    }
+  }
+
+  /**
+   * Indexes a schema file content into the local FTS5 RAG.
+   */
+  async index_schema(
+    project_id: string,
+    file_path: string,
+    content: string
+  ): Promise<void> {
+    const response = await this.send({
+      command_type: "index_schema",
+      request_id: crypto.randomUUID(),
+      project_id,
+      file_path,
+      content,
+    });
+
+    if (response.response_type !== "index_schema_ok") {
+      throw new Error(`Unexpected response: ${response.response_type}`);
+    }
+  }
+
+  /**
+   * Searches the indexed schemas using FTS5 MATCH.
+   */
+  async search_schema(
+    project_id: string,
+    query: string,
+    limit: number = 10
+  ): Promise<SearchResult[]> {
+    const response = await this.send({
+      command_type: "search_schema",
+      request_id: crypto.randomUUID(),
+      project_id,
+      query,
+      limit,
+    });
+
+    if (response.response_type !== "search_schema_result") {
+      throw new Error(`Unexpected response: ${response.response_type}`);
+    }
+
+    return response.results;
   }
 
   /**

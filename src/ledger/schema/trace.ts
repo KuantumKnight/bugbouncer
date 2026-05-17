@@ -20,6 +20,7 @@ export const TRACE_TABLE_DDL = `
     iv                BLOB     NOT NULL,
     stability_score   REAL     NOT NULL DEFAULT 0.0,
     is_panic_event    INTEGER  NOT NULL DEFAULT 0,
+    user_id           TEXT,
     created_at        TEXT     NOT NULL DEFAULT (datetime('now'))
   );
 `;
@@ -37,6 +38,9 @@ export const TRACE_INDEX_DDL = `
 
   CREATE INDEX IF NOT EXISTS idx_trace_stability
     ON ${TRACE_TABLE_NAME} (stability_score);
+
+  CREATE INDEX IF NOT EXISTS idx_trace_user_id
+    ON ${TRACE_TABLE_NAME} (user_id);
 `;
 
 /**
@@ -53,6 +57,7 @@ export const TRACE_COLUMNS = [
   "iv",
   "stability_score",
   "is_panic_event",
+  "user_id",
   "created_at",
 ] as const;
 

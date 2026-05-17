@@ -17,14 +17,14 @@ import { config_engine } from "@/kernel/config/engine";
 // ──────────────────────────────────────────────
 
 interface FiberNode {
-  type: any;
+  type: unknown;
   key: string | null;
-  stateNode: any;
+  stateNode: unknown;
   child: FiberNode | null;
   sibling: FiberNode | null;
   return: FiberNode | null;
-  memoizedProps: any;
-  memoizedState: any;
+  memoizedProps: unknown;
+  memoizedState: unknown;
   actualDuration?: number;
   actualStartTime?: number;
   alternate: FiberNode | null;
@@ -32,9 +32,9 @@ interface FiberNode {
 }
 
 interface ReactDevToolsHook {
-  onCommitFiberRoot: (rendererID: number, root: any, priorityLevel: number) => void;
-  getFiberRoots: (rendererID: number) => Set<any>;
-  inject: (renderer: any) => number;
+  onCommitFiberRoot: (rendererID: number, root: unknown, priorityLevel: number) => void;
+  getFiberRoots: (rendererID: number) => Set<unknown>;
+  inject: (renderer: unknown) => number;
 }
 
 declare global {
@@ -85,12 +85,12 @@ export class FiberObserver {
   /**
    * Handles a React commit by queueing an asynchronous tree traversal.
    */
-  private handle_commit(root: any): void {
+  private handle_commit(root: unknown): void {
     // We use requestIdleCallback to keep the commit phase fast (< 1ms overhead)
-    const scheduler = (window as any).requestIdleCallback || ((cb: any) => setTimeout(cb, 1));
-    
+    const scheduler = (window as unknown as { requestIdleCallback?: (cb: () => void) => void }).requestIdleCallback || ((cb: () => void) => setTimeout(cb, 1));
+    const fiberRoot = root as { current: FiberNode };
     scheduler(() => {
-      this.traverse_root(root.current);
+      this.traverse_root(fiberRoot.current);
     });
   }
 
@@ -132,9 +132,10 @@ export class FiberObserver {
           parent_span_id,
           timestamp_nanos: Math.floor(timestamp),
           event_type: "fiber_update",
-          payload: this.dag_mapper.normalize_payload(raw_payload) as any,
+          payload: this.dag_mapper.normalize_payload(raw_payload) as TraceMetadata["payload"],
           stability_score: 1.0,
-          is_panic_event: false
+          is_panic_event: false,
+          user_id: causal_context.get_user_id() ?? undefined
         };
 
         traces.push(trace);
@@ -160,18 +161,22 @@ export class FiberObserver {
 
   private get_component_name(node: FiberNode): string {
     if (typeof node.type === "string") return node.type;
-    if (typeof node.type === "function") return node.type.displayName || node.type.name || "Anonymous";
-    if (node.type && node.type.render) return node.type.render.name || "ForwardRef";
+    if (typeof node.type === "function") return (node.type as { displayName?: string; name?: string }).displayName || (node.type as { name?: string }).name || "Anonymous";
+    if (node.type && typeof node.type === "object" && "render" in node.type) {
+      const renderObj = (node.type as { render?: { name?: string } }).render;
+      if (renderObj) return renderObj.name || "ForwardRef";
+    }
     return "UnknownComponent";
   }
 
-  private sanitize_props(props: any): Record<string, any> {
-    if (!props) return {};
-    const result: Record<string, any> = {};
+  private sanitize_props(props: unknown): Record<string, unknown> {
+    if (!props || typeof props !== "object") return {};
+    const result: Record<string, unknown> = {};
+    const record = props as Record<string, unknown>;
     // Only capture shallow primitives to avoid massive payloads
-    for (const key in props) {
-      if (typeof props[key] !== "object" && typeof props[key] !== "function") {
-        result[key] = props[key];
+    for (const key in record) {
+      if (typeof record[key] !== "object" && typeof record[key] !== "function") {
+        result[key] = record[key];
       }
     }
     return result;

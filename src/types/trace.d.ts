@@ -6,12 +6,15 @@
  * and direct alignment with SQLite Ledger keys.
  */
 
+import { FuzzerAnomaly } from "@/kernel/fuzzer/types";
+
 export interface TraceMetadata {
   trace_id: string;
   span_id: string;
   parent_span_id?: string;
   timestamp_nanos: number;
-  event_type: "dom_mutation" | "network_request" | "fiber_update" | "error";
+  event_type: "dom_mutation" | "network_request" | "fiber_update" | "error" | "fuzzer_anomaly";
+  user_id?: string;
   
   // High-performance context payload
   payload: {
@@ -24,7 +27,7 @@ export interface TraceMetadata {
 
     // Fiber Metadata
     component_name?: string;
-    props?: Record<string, any>;
+    props?: Record<string, unknown>;
     duration_ms?: number;
     fiber_tag?: number;
 
@@ -32,6 +35,12 @@ export interface TraceMetadata {
     target_node_id?: string;
     error_stack?: string;
     error_message?: string;
+
+    // Structural Hashing (FR24 — Schema Drift Detection)
+    schema_hash?: string;
+
+    // Fuzzer Context
+    anomaly_data?: FuzzerAnomaly;
   };
 
   // Stability markers

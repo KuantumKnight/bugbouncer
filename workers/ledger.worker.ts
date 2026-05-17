@@ -19,6 +19,9 @@ import type {
   LedgerResponse,
   LedgerInsertCommand,
   LedgerQueryCommand,
+  LedgerSaveProjectCommand,
+  LedgerIndexSchemaCommand,
+  LedgerSearchSchemaCommand,
 } from "@/types/ledger";
 import type { Sqlite3Database, Sqlite3Module } from "@/ledger/db/init";
 import { init_database } from "@/ledger/db/init";
@@ -28,8 +31,7 @@ import {
   decrypt_payload,
 } from "@/ledger/db/crypto";
 import { TRACE_TABLE_NAME } from "@/ledger/schema/trace";
-
-declare function importScripts(...urls: string[]): void;
+import { PROJECT_METADATA_TABLE_NAME, SCHEMA_INDEX_TABLE_NAME } from "@/ledger/schema/rag";
 
 // ──────────────────────────────────────────────
 // Worker State
@@ -79,8 +81,8 @@ async function handle_insert(cmd: LedgerInsertCommand): Promise<void> {
   db.exec({
     sql: `INSERT OR REPLACE INTO ${TRACE_TABLE_NAME}
             (trace_id, span_id, parent_span_id, timestamp_nanos,
-             event_type, encrypted_payload, iv, stability_score, is_panic_event)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             event_type, encrypted_payload, iv, stability_score, is_panic_event, user_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     bind: [
       trace.trace_id,
       trace.span_id,
@@ -91,6 +93,7 @@ async function handle_insert(cmd: LedgerInsertCommand): Promise<void> {
       iv,
       trace.stability_score,
       trace.is_panic_event ? 1 : 0,
+      trace.user_id ?? null,
     ],
   });
 
@@ -126,6 +129,14 @@ async function handle_query(cmd: LedgerQueryCommand): Promise<void> {
   if (filters.since_timestamp_nanos !== undefined) {
     conditions.push("timestamp_nanos >= ?");
     binds.push(filters.since_timestamp_nanos);
+  }
+  if (filters.user_id !== undefined) {
+    if (filters.user_id === null) {
+      conditions.push("user_id IS NULL");
+    } else {
+      conditions.push("user_id = ?");
+      binds.push(filters.user_id);
+    }
   }
 
   const where_clause =
@@ -174,6 +185,7 @@ async function handle_query(cmd: LedgerQueryCommand): Promise<void> {
       payload: decrypted_payload as TraceMetadata["payload"],
       stability_score: row.stability_score as number,
       is_panic_event: (row.is_panic_event as number) === 1,
+      user_id: (row.user_id as string) || undefined,
     });
   }
 
@@ -241,6 +253,76 @@ function handle_status(request_id: string): void {
   });
 }
 
+function handle_save_project(cmd: LedgerSaveProjectCommand): void {
+  if (!db) {
+    post_error(cmd.request_id, "Ledger not initialized", "NOT_READY");
+    return;
+  }
+
+  db.exec({
+    sql: `INSERT OR REPLACE INTO ${PROJECT_METADATA_TABLE_NAME}
+            (project_id, framework, auth_provider, database_provider)
+          VALUES (?, ?, ?, ?)`,
+    bind: [cmd.project_id, cmd.framework, cmd.auth_provider, cmd.database_provider],
+  });
+
+  post_response({
+    response_type: "save_project_ok",
+    request_id: cmd.request_id,
+  });
+}
+
+function handle_index_schema(cmd: LedgerIndexSchemaCommand): void {
+  if (!db) {
+    post_error(cmd.request_id, "Ledger not initialized", "NOT_READY");
+    return;
+  }
+
+  db.exec({
+    sql: `INSERT INTO ${SCHEMA_INDEX_TABLE_NAME}
+            (project_id, file_path, content)
+          VALUES (?, ?, ?)`,
+    bind: [cmd.project_id, cmd.file_path, cmd.content],
+  });
+
+  post_response({
+    response_type: "index_schema_ok",
+    request_id: cmd.request_id,
+  });
+}
+
+function handle_search_schema(cmd: LedgerSearchSchemaCommand): void {
+  if (!db) {
+    post_error(cmd.request_id, "Ledger not initialized", "NOT_READY");
+    return;
+  }
+
+  const results: Array<{ file_path: string; content: string; rank: number }> = [];
+  
+  db.exec({
+    sql: `SELECT file_path, content, rank
+          FROM ${SCHEMA_INDEX_TABLE_NAME}
+          WHERE project_id = ? AND ${SCHEMA_INDEX_TABLE_NAME} MATCH ?
+          ORDER BY rank
+          LIMIT ?`,
+    bind: [cmd.project_id, cmd.query, cmd.limit ?? 10],
+    rowMode: "object",
+    callback: (row) => {
+      results.push(row as unknown as { file_path: string; content: string; rank: number });
+    },
+  });
+
+  post_response({
+    response_type: "search_schema_result",
+    request_id: cmd.request_id,
+    results: results.map((r) => ({
+      file_path: r.file_path as string,
+      content: r.content as string,
+      rank: r.rank as number,
+    })),
+  });
+}
+
 // ──────────────────────────────────────────────
 // Message Router
 // ──────────────────────────────────────────────
@@ -261,6 +343,15 @@ self.onmessage = async (event: MessageEvent<LedgerCommand>) => {
         break;
       case "status":
         handle_status(cmd.request_id);
+        break;
+      case "save_project":
+        handle_save_project(cmd);
+        break;
+      case "index_schema":
+        handle_index_schema(cmd);
+        break;
+      case "search_schema":
+        handle_search_schema(cmd);
         break;
       default:
         post_error(
