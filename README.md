@@ -209,28 +209,28 @@ When a violation is detected, BugBouncer generates:
 
 ```
 ┌─────────────────────────────────────────────────┐
-│                  LOCAL MACHINE                   │
-│                                                  │
+│                  LOCAL MACHINE                  │
+│                                                 │
 │  ┌──────────┐  SharedArrayBuffer  ┌───────────┐ │
 │  │  Kernel   │◄──────────────────►│  Ledger   │ │
 │  │ (Main     │   Zero-Copy        │  Worker   │ │
 │  │  Thread)  │   Atomics          │ (SQLite)  │ │
 │  └──────────┘                     └───────────┘ │
-│       │                                │         │
-│       │ postMessage                    │         │
-│       ▼                                ▼         │
+│       │                                │        │
+│       │ postMessage                    │        │
+│       ▼                                ▼        │
 │  ┌──────────┐                   ┌───────────┐   │
-│  │ Dashboard │                  │  Encrypted │   │
-│  │   UI      │                  │   OPFS     │   │
+│  │Dashboard │                   │ Encrypted │   │
+│  │   UI     │                   │   OPFS    │   │
 │  └──────────┘                   └───────────┘   │
-│                                                  │
-├──────────────────────────────────────────────────┤
-│              OPTIONAL CLOUD SYNC                 │
-│  ┌──────────────┐    ┌────────────────────┐      │
-│  │   Supabase    │    │  Anonymized Hashes │      │
-│  │  (Registry)   │    │  Only — No Source  │      │
-│  └──────────────┘    └────────────────────┘      │
-└──────────────────────────────────────────────────┘
+│                                                 │
+├─────────────────────────────────────────────────┤
+│              OPTIONAL CLOUD SYNC                │
+│  ┌──────────────┐    ┌────────────────────┐     │
+│  │   Supabase   │    │  Anonymized Hashes │     │
+│  │  (Registry)  │    │  Only — No Source  │     │
+│  └──────────────┘    └────────────────────┘     │
+└─────────────────────────────────────────────────┘
 ```
 
 ---
