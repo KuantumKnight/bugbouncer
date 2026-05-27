@@ -39,7 +39,7 @@ export function eject_content(content: string): string {
 }
 
 /**
- * Main execution handler to process files via CLI.
+ * Main execution handler to process files via CLI.  
  */
 export function run_eject(file_paths: string[]): void {
   for (const file_path of file_paths) {
