@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="License: MIT" />
 </p>
 
-<h1 align="center">🛡️ BugBouncer</h1>
+<h1 align="center">BugBouncer</h1>
 
 <p align="center">
   <strong>Research-as-a-Service — Deterministic Stability Verification for Modern SaaS</strong>
