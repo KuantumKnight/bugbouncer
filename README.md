@@ -27,6 +27,8 @@
 </p>
 
 ---
+<img width="1774" height="887" alt="ChatGPT Image Jul 3, 2026, 02_50_28 AM" src="https://github.com/user-attachments/assets/54866f5a-05fc-4ace-aab8-c86d72c7c110" />
+
 
 ## 🧠 What Is BugBouncer?
 
